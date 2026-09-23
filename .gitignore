@@ -8,5 +8,6 @@ __pycache__/
 data/raw/
 data/processed/
 data-csv-flat/
+data-csv-flat.building/
 
 .pytest_cache/
