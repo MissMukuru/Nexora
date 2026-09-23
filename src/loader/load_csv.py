@@ -1,14 +1,16 @@
 """Bulk-load the generated flat CSV tables into PostgreSQL."""
 
-import argparse
+import argparse #adds command line argument
 import csv
 import os
 from pathlib import Path
 
-import psycopg
+import psycopg #this is the Postgres python driver
 from psycopg import sql
 
+#you have to define the tables in a dictionary
 TABLES = {
+    #the inner dictionary maps like column name to postgres types and contraints in that order
     "customers": {
         "customer_id": "INTEGER PRIMARY KEY",
         "company_name": "TEXT NOT NULL",
@@ -256,15 +258,17 @@ TABLES = {
         "stage": "TEXT NOT NULL",
     },
 }
-
+#also always define the order you want it to be loaded as, most recommended is the way is the generator order
+#Parent tables, refference tables or business tables then the transaction or event tables
 LOAD_ORDER = [
-    "customers", "products_services", "employees", "suppliers",
+    "customers", "products_services", "employees", "suppliers", #teh best practice is to start with the parent tables
     "marketing_campaigns", "sales_pipeline", "subscriptions",
     "transactions", "support_cases", "interactions", "invoices_payments",
     "customer_product_usage", "daily_operations", "external_factors",
     "inventory_movements", "subscription_events", "pipeline_stage_history",
 ]
 
+#basically each tuple represents a relationship eg 
 FOREIGN_KEYS = [
     ("marketing_campaigns", "product_id", "products_services", "product_id"),
     ("sales_pipeline", "customer_id", "customers", "customer_id"),
@@ -280,7 +284,7 @@ FOREIGN_KEYS = [
     ("transactions", "opportunity_id", "sales_pipeline", "opportunity_id"),
     ("support_cases", "customer_id", "customers", "customer_id"),
     ("support_cases", "product_id", "products_services", "product_id"),
-    ("support_cases", "transaction_id", "transactions", "transaction_id"),
+    ("support_cases", "transaction_id", "transactions", "transaction_id"), #baiscally means that every support case must refer to  real transation
     ("support_cases", "employee_id", "employees", "employee_id"),
     ("interactions", "customer_id", "customers", "customer_id"),
     ("interactions", "employee_id", "employees", "employee_id"),
@@ -300,22 +304,22 @@ FOREIGN_KEYS = [
 ]
 
 
-def connection_string():
+def connection_string(): #just returns the connection details
     return os.getenv(
         "NEXORA_DATABASE_URL",
         "host=localhost port=5433 dbname=nexora user=nexora password=nexora",
     )
 
 
-def create_tables(conn):
-    with conn.cursor() as cur:
+def create_tables(conn): #creates the schemas and tables
+    with conn.cursor() as cur: #this creates a cursor that sends SQL commands to postgres
         cur.execute("CREATE SCHEMA IF NOT EXISTS raw")
         for table, columns in TABLES.items():
-            definition = sql.SQL(", ").join(
-                sql.SQL("{} {}").format(sql.Identifier(column), sql.SQL(type_sql))
+            definition = sql.SQL(", ").join( #builds the column definition section of a create table statement , like "customer_id" INTEGER PRIMARY KEY
+                sql.SQL("{} {}").format(sql.Identifier(column), sql.SQL(type_sql)) #the type and contraints 
                 for column, type_sql in columns.items()
             )
-            cur.execute(
+            cur.execute( #sends sql to postgresSQL
                 sql.SQL("CREATE TABLE IF NOT EXISTS raw.{} ({})").format(
                     sql.Identifier(table), definition
                 )
@@ -342,29 +346,30 @@ def clear_tables(conn):
             sql.SQL(", ").join(sql.SQL("raw.{}").format(sql.Identifier(table)) for table in reversed(LOAD_ORDER))
         ))
 
-
+#loads onecsv into a table
 def load_csv(conn, table, input_dir):
     path = input_dir / f"{table}.csv"
     if not path.exists():
         raise FileNotFoundError(path)
-    columns = list(TABLES[table])
-    quoted_columns = sql.SQL(", ").join(sql.Identifier(column) for column in columns)
+    columns = list(TABLES[table]) #gets the column names from the table
+    quoted_columns = sql.SQL(", ").join(sql.Identifier(column) for column in columns) #builds a coma seperated column list
     statement = sql.SQL(
-        "COPY raw.{} ({}) FROM STDIN WITH (FORMAT CSV, HEADER TRUE, NULL '')"
+        "COPY raw.{} ({}) FROM STDIN WITH (FORMAT CSV, HEADER TRUE, NULL '')" #tells postgresql to receive csv data from python
     ).format(sql.Identifier(table), quoted_columns)
     with path.open("r", encoding="utf-8", newline="") as stream:
-        with conn.cursor().copy(statement) as copy:
+        with conn.cursor().copy(statement) as copy:#opens the csv for reading
             while chunk := stream.read(1024 * 1024):
                 copy.write(chunk)
     with conn.cursor() as cur:
         cur.execute(sql.SQL("SELECT COUNT(*) FROM raw.{}").format(sql.Identifier(table)))
         return cur.fetchone()[0]
 
-
+#adds relationships and indexes after the data has loaded
 def add_constraints_and_indexes(conn):
     with conn.cursor() as cur:
+        #makes the loop that goes through the column and defines the column, the data type and the contraints
         for table, column, parent, parent_column in FOREIGN_KEYS:
-            name = f"{table}_{column}_fkey"
+            name = f"{table}_{column}_fkey" #loops over evry foreign key definition
             cur.execute(sql.SQL(
                 "ALTER TABLE raw.{} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES raw.{} ({})"
             ).format(
