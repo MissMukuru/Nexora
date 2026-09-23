@@ -1,0 +1,7 @@
+.\venv\Scripts\python.exe -m src.generator.generate --output data-csv-flat --scale 0.02
+
+.\venv\Scripts\Activate.ps1
+
+python -m src.generator.generate --output data-csv-flat --scale 0.02
+
+.\venv\Scripts\python.exe -m src.generator.verify data-csv-flat
