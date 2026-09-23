@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: nexora-postgres
+    environment:
+      POSTGRES_DB: nexora
+      POSTGRES_USER: nexora
+      POSTGRES_PASSWORD: nexora
+    ports:
+      - "5432:5432"
+    volumes:
+      - nexora_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL','pg_isready -U nexora -d nexora']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  nexora_postgres_data:

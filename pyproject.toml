@@ -12,7 +12,6 @@ dependencies = [
     "faker",
     "numpy",
     "polars",
-    "pyarrow",
     "duckdb",
     "psycopg[binary]",
     "python-dotenv"
