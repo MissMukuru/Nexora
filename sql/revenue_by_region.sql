@@ -1,3 +1,4 @@
+-- Active: 1790523346434@@127.0.0.1@5432@nexora@raw
 SELECT 
 c.region, 
 COUNT(*) AS transactions_count, --counts the matvhing transation rows and names the output column
